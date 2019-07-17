@@ -12,7 +12,7 @@ using System.Web;
 using System.Web.Mvc;
 
 namespace ConnectionValidator.Controllers
-{ 
+{
     public class HomeController : Controller
     {
         // GET: Home
@@ -20,7 +20,7 @@ namespace ConnectionValidator.Controllers
         {
             string siteFolder;
             int fileCount;
-           
+
             // Validate APPINSIGHTS_INSTRUMENTATIONKEY app insights connection
             string appInsightsKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
 
@@ -45,14 +45,14 @@ namespace ConnectionValidator.Controllers
 
             Dictionary<string, string> storageResults = ValidateConnectionStrings();
 
-            return View(model: fileCount);
+            return View(model: storageResults);
         }
 
         public Dictionary<string, string> ValidateConnectionStrings()
         {
             IDictionary appsettings = Environment.GetEnvironmentVariables();
             Dictionary<string, string> storageResults = new Dictionary<string, string>();
-            List<string> storageConnectionStrings = new List<string> { };
+            Dictionary<string, string> storageConnectionStrings = new Dictionary<string, string>();
             string azureWebJobsStorageString = String.Empty;
             string azureWebJobsDashboardStorageString = String.Empty;
             string consumptionCodeConfigStorageConnection = String.Empty;
@@ -63,25 +63,27 @@ namespace ConnectionValidator.Controllers
             List<string> settingKeys = new List<string> { "AzureWebJobsStorage", "AzureWebJobsDashboard", "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING" };
             string storageSymptoms = "Storage account is healthy";
 
-            foreach (var setting in settingKeys)
-            {
-                storageResults.Add(setting, storageSymptoms);
-            }
 
             if (Environment.GetEnvironmentVariable("AzureWebJobsStorage") == null)
             {
-                throw new Exception("AzureWebJobsStorage is not set for your function app.");
+                //throw new Exception("AzureWebJobsStorage is not set for your function app.");
+                storageConnectionStrings.Add("AzureWebJobsStorage", "");
+
             }
             else
             {
                 azureWebJobsStorageString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
-                storageConnectionStrings.Add(azureWebJobsStorageString);
+                 storageConnectionStrings.Add("AzureWebJobsStorage", azureWebJobsStorageString);
             }
 
             if (Environment.GetEnvironmentVariable("AzureWebJobsDashboard") != null)
             {
                 azureWebJobsDashboardStorageString = Environment.GetEnvironmentVariable("AzureWebJobsDashboard");
-                storageConnectionStrings.Add(azureWebJobsDashboardStorageString);
+                storageConnectionStrings.Add("AzureWebJobsDashboard", azureWebJobsDashboardStorageString);
+            }
+            else
+            {
+                storageConnectionStrings.Add("AzureWebJobsDashboard", "");
             }
 
             // For consumption plans only. But this is mandatory settings for consumption plan.
@@ -89,12 +91,12 @@ namespace ConnectionValidator.Controllers
             if (Environment.GetEnvironmentVariable("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING") != null)
             {
                 consumptionCodeConfigStorageConnection = Environment.GetEnvironmentVariable("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING");
-                storageConnectionStrings.Add(consumptionCodeConfigStorageConnection);
+                storageConnectionStrings.Add("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING", consumptionCodeConfigStorageConnection);
             }
 
-            foreach (string connectionString in storageConnectionStrings)
+            foreach (KeyValuePair<string, string> connectionString in storageConnectionStrings)
             {
-                storageResults.Add(connectionString, MakeServiceRequestsExpectSuccess(connectionString));
+                storageResults.Add(connectionString.Key, MakeServiceRequestsExpectSuccess(connectionString.Value));
             }
             return storageResults;
         }
@@ -112,7 +114,8 @@ namespace ConnectionValidator.Controllers
         //Functions uses Storage for operations such as managing triggers and logging function executions.
         internal string MakeServiceRequestsExpectSuccess(string connectionString)
         {
-            string storageSymptoms = string.Empty;
+            string storageSymptoms = connectionString;
+         
             CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
             // Make blob service requests
             try
@@ -124,31 +127,31 @@ namespace ConnectionValidator.Controllers
             }
             catch (Exception)
             {
-                storageSymptoms = "Blob is not enabled.";
+                storageSymptoms += "   Blob is not enabled.";
             }
 
             try
             {
                 // Make queue service requests
                 CloudQueueClient queueClient = account.CreateCloudQueueClient();
-            queueClient.ListQueues().Count();
-            queueClient.GetServiceProperties();
-        }
+                queueClient.ListQueues().Count();
+                queueClient.GetServiceProperties();
+            }
             catch (Exception)
             {
-                storageSymptoms = "Queue is not enabled.";
+                storageSymptoms += "   Queue is not enabled.";
             }
 
             try
             {
                 // Make table service requests
                 CloudTableClient tableClient = account.CreateCloudTableClient();
-            tableClient.ListTables().Count();
-            tableClient.GetServiceProperties();
-        }
+                tableClient.ListTables().Count();
+                tableClient.GetServiceProperties();
+            }
             catch (Exception)
             {
-                storageSymptoms = "Table is not enabled.";
+                storageSymptoms += "  Table is not enabled.";
             }
 
             try
@@ -161,7 +164,7 @@ namespace ConnectionValidator.Controllers
             }
             catch (Exception)
             {
-                storageSymptoms = "File is not enabled.";
+                storageSymptoms += "   File is not enabled.";
             }
 
             return storageSymptoms;

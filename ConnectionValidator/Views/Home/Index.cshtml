@@ -1,14 +1,20 @@
-﻿@model int
-@{Layout = null;}
-<!DOCTYPE html>
-<html>
-<head>
-    <meta name="viewport" content="width=device-width" />
-    <title>File Counter MVC</title>
-</head>
-<body>
-    <div>
-        <h1>Your site has @Model files!</h1>
-    </div>
-</body>
+﻿@using System.Collections;
+@model Dictionary<string, string>
+
+@{
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name="viewport" content="width=device-width" />
+        <title>File Counter MVC</title>
+    </head>
+    <body>
+        <div>
+            @foreach (KeyValuePair<string, string> de in Model)
+            {
+                <p>@de.Key: @de.Value</p>
+            }
+        </div>
+    </body>
 </html>
+}
