@@ -1,6 +1,8 @@
 ﻿body {
     padding-top: 50px;
     padding-bottom: 20px;
+    padding: 1%;
+    background-color: #abca
 }
 
 /* Set padding to keep content from hitting the edges */
@@ -14,5 +16,21 @@ input,
 select,
 textarea {
     max-width: 280px;
+}
+
+
+h2, h4 {
+    font-family: 'Nunito', sans-serif;
+}
+
+
+#storage-account-list-table {
+    table-layout: fixed;
+    width: 50%;
+    vertical-align: middle;
+}
+
+button {
+    margin-left: 2%;
 }
 

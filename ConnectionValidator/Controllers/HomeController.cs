@@ -13,6 +13,15 @@ using System.Web.Mvc;
 
 namespace ConnectionValidator.Controllers
 {
+    public class StorageAccountsValidation
+    {
+        public string AppSettingsKey { get; set; }
+        public Boolean Mandatory { get; set; }
+        public string AccountName { get; set; }
+        public string Message { get; set; }
+        public int Status { get; set; }
+    }
+
     public class HomeController : Controller
     {
         // GET: Home
@@ -22,7 +31,7 @@ namespace ConnectionValidator.Controllers
             int fileCount;
 
             // Validate APPINSIGHTS_INSTRUMENTATIONKEY app insights connection
-            string appInsightsKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
+          string appInsightsKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
 
             if (Environment.GetEnvironmentVariable("home") != null)
             {
@@ -37,68 +46,95 @@ namespace ConnectionValidator.Controllers
                 siteFolder = Server.MapPath("/");
             }
 
-            fileCount =
-                System.IO.Directory.GetFiles(
-                    siteFolder,
-                    "*.*",
-                    SearchOption.AllDirectories).Length;
+            //fileCount =
+            //    System.IO.Directory.GetFiles(
+            //        siteFolder,
+            //        "*.*",
+            //        SearchOption.AllDirectories).Length;
 
             Dictionary<string, string> storageResults = ValidateConnectionStrings();
 
-            return View(model: storageResults);
+            return View();
         }
 
         public Dictionary<string, string> ValidateConnectionStrings()
         {
-            IDictionary appsettings = Environment.GetEnvironmentVariables();
             Dictionary<string, string> storageResults = new Dictionary<string, string>();
-            Dictionary<string, string> storageConnectionStrings = new Dictionary<string, string>();
-            string azureWebJobsStorageString = String.Empty;
-            string azureWebJobsDashboardStorageString = String.Empty;
-            string consumptionCodeConfigStorageConnection = String.Empty;
-            // Validate AzureWebJobsStorage and AzureWebJobsDashboard connectivity and if it's full purpose storage account
-
-            // AzureWebJobsStorage can not be null. 
-            //The Azure Functions runtime uses this storage account connection string for all functions except for HTTP triggered functions.
-            List<string> settingKeys = new List<string> { "AzureWebJobsStorage", "AzureWebJobsDashboard", "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING" };
-            string storageSymptoms = "Storage account is healthy";
-
-
-            if (Environment.GetEnvironmentVariable("AzureWebJobsStorage") == null)
+            try
             {
-                //throw new Exception("AzureWebJobsStorage is not set for your function app.");
-                storageConnectionStrings.Add("AzureWebJobsStorage", "");
+                string testBlobOnlyAccount = "";
+                IDictionary appsettings = Environment.GetEnvironmentVariables();
+                List<StorageAccountsValidation> storageValidations = new List<StorageAccountsValidation> { };
 
+                Dictionary<string, string> storageConnectionStrings = new Dictionary<string, string>();
+                string azureWebJobsStorageString = String.Empty;
+                string azureWebJobsDashboardStorageString = String.Empty;
+                string consumptionCodeConfigStorageConnection = String.Empty;
+                // Validate AzureWebJobsStorage and AzureWebJobsDashboard connectivity and if it's full purpose storage account
+
+                // AzureWebJobsStorage can not be null. 
+                //The Azure Functions runtime uses this storage account connection string for all functions except for HTTP triggered functions.
+                List<string> settingKeys = new List<string> { "AzureWebJobsStorage", "AzureWebJobsDashboard", "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING" };
+
+
+                if (Environment.GetEnvironmentVariable("AzureWebJobsStorage") == null)
+                {
+                    //throw new Exception("AzureWebJobsStorage is not set for your function app.");
+                    storageConnectionStrings.Add("AzureWebJobsStorage", testBlobOnlyAccount);
+
+                }
+                else
+                {
+                    azureWebJobsStorageString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+                    storageConnectionStrings.Add("AzureWebJobsStorage", azureWebJobsStorageString);
+                }
+
+                if (Environment.GetEnvironmentVariable("AzureWebJobsDashboard") != null)
+                {
+                    azureWebJobsDashboardStorageString = Environment.GetEnvironmentVariable("AzureWebJobsDashboard");
+                    storageConnectionStrings.Add("AzureWebJobsDashboard", azureWebJobsDashboardStorageString);
+                }
+                else
+                {
+                    storageConnectionStrings.Add("AzureWebJobsDashboard", testBlobOnlyAccount);
+                }
+
+                // For consumption plans only. But this is mandatory settings for consumption plan.
+                // Connection string for storage account where the function app code and configuration are stored. 
+                if (Environment.GetEnvironmentVariable("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING") != null)
+                {
+                    consumptionCodeConfigStorageConnection = Environment.GetEnvironmentVariable("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING");
+                    storageConnectionStrings.Add("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING", consumptionCodeConfigStorageConnection);
+                }
+
+                ViewBag.storageConnectionStrings = storageConnectionStrings;
+
+                foreach (KeyValuePair<string, string> connectionString in storageConnectionStrings)
+                {
+                    storageResults.Add(connectionString.Key, MakeServiceRequestsExpectSuccess(connectionString.Value));
+
+                    string validationString = MakeServiceRequestsExpectSuccess(connectionString.Value);
+                    storageValidations.Add(new StorageAccountsValidation
+                    {
+                        AppSettingsKey = connectionString.Key,
+                        AccountName = connectionString.Value.Split(new string[] { "AccountName=", ";AccountKey=" }, StringSplitOptions.RemoveEmptyEntries)[1],
+                        Message = validationString,
+                        Status = 0
+                    });
+
+                }
+
+                ViewBag.storageValidations = storageValidations;
+
+           //    return storageResults;
             }
-            else
+            catch (Exception e)
             {
-                azureWebJobsStorageString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
-                 storageConnectionStrings.Add("AzureWebJobsStorage", azureWebJobsStorageString);
+                Console.WriteLine(e.Message);
             }
 
-            if (Environment.GetEnvironmentVariable("AzureWebJobsDashboard") != null)
-            {
-                azureWebJobsDashboardStorageString = Environment.GetEnvironmentVariable("AzureWebJobsDashboard");
-                storageConnectionStrings.Add("AzureWebJobsDashboard", azureWebJobsDashboardStorageString);
-            }
-            else
-            {
-                storageConnectionStrings.Add("AzureWebJobsDashboard", "");
-            }
-
-            // For consumption plans only. But this is mandatory settings for consumption plan.
-            // Connection string for storage account where the function app code and configuration are stored. 
-            if (Environment.GetEnvironmentVariable("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING") != null)
-            {
-                consumptionCodeConfigStorageConnection = Environment.GetEnvironmentVariable("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING");
-                storageConnectionStrings.Add("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING", consumptionCodeConfigStorageConnection);
-            }
-
-            foreach (KeyValuePair<string, string> connectionString in storageConnectionStrings)
-            {
-                storageResults.Add(connectionString.Key, MakeServiceRequestsExpectSuccess(connectionString.Value));
-            }
             return storageResults;
+
         }
 
         // The Azure Functions runtime uses this storage account connection string for all functions 
@@ -115,57 +151,71 @@ namespace ConnectionValidator.Controllers
         internal string MakeServiceRequestsExpectSuccess(string connectionString)
         {
             string storageSymptoms = connectionString;
-         
-            CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
-            // Make blob service requests
             try
             {
-                CloudBlobClient blobClient = account.CreateCloudBlobClient();
-                //   blobClient.ListContainersSegmentedAsync();
-                blobClient.ListContainers().Count();
-                blobClient.GetServiceProperties();
-            }
-            catch (Exception)
-            {
-                storageSymptoms += "   Blob is not enabled.";
-            }
+                if (string.IsNullOrWhiteSpace(connectionString))
+                {
+                    return string.Empty;
+                }
 
-            try
-            {
-                // Make queue service requests
-                CloudQueueClient queueClient = account.CreateCloudQueueClient();
-                queueClient.ListQueues().Count();
-                queueClient.GetServiceProperties();
-            }
-            catch (Exception)
-            {
-                storageSymptoms += "   Queue is not enabled.";
-            }
 
-            try
-            {
-                // Make table service requests
-                CloudTableClient tableClient = account.CreateCloudTableClient();
-                tableClient.ListTables().Count();
-                tableClient.GetServiceProperties();
-            }
-            catch (Exception)
-            {
-                storageSymptoms += "  Table is not enabled.";
-            }
+                CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
+                // Make blob service requests
+                try
+                {
+                    CloudBlobClient blobClient = account.CreateCloudBlobClient();
+                    //   blobClient.ListContainersSegmentedAsync();
+                    blobClient.ListContainers().Count();
+                    blobClient.GetServiceProperties();
+                }
+                catch (Exception)
+                {
+                    storageSymptoms += "   Blob is not enabled.";
+                }
 
-            try
-            {
-                // Not sure if this is only required for consumption
-                //  When using a Consumption plan function definitions are stored in File Storage.
-                CloudFileClient fileClient = account.CreateCloudFileClient();
-                fileClient.ListShares().Count();
-                fileClient.GetServiceProperties();
+                try
+                {
+                    // Make queue service requests
+                    CloudQueueClient queueClient = account.CreateCloudQueueClient();
+                    queueClient.ListQueues().Count();
+                    queueClient.GetServiceProperties();
+                }
+                catch (Exception)
+                {
+                    storageSymptoms += "   Queue is not enabled.";
+                }
+
+                try
+                {
+                    // Make table service requests
+                    CloudTableClient tableClient = account.CreateCloudTableClient();
+                    tableClient.ListTables().Count();
+                    tableClient.GetServiceProperties();
+                }
+                catch (Exception)
+                {
+                    storageSymptoms += "  Table is not enabled.";
+                }
+
+                try
+                {
+                    // Not sure if this is only required for consumption
+                    //  When using a Consumption plan function definitions are stored in File Storage.
+                    CloudFileClient fileClient = account.CreateCloudFileClient();
+                    fileClient.ListShares().Count();
+                    fileClient.GetServiceProperties();
+                }
+                catch (Exception)
+                {
+                    storageSymptoms += "   File is not enabled.";
+                }
+
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                storageSymptoms += "   File is not enabled.";
+                Console.WriteLine(e.Message);
             }
+           
 
             return storageSymptoms;
         }
