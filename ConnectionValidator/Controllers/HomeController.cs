@@ -8,6 +8,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Web;
 using System.Web.Mvc;
 
@@ -68,15 +69,23 @@ namespace ConnectionValidator.Controllers
             };
 
             List<StorageAccountsValidation> storageValidations = new List<StorageAccountsValidation> { };
-            storageValidations.Add(example);
+            //storageValidations.Add(example);
 
             try
             {
-                  string testBlobOnlyAccount = "";
-                //string testBlobOnlyAccount = "";
-                // IDictionary appsettings = Environment.GetEnvironmentVariables();
-
                 Dictionary<string, string> storageConnectionStrings = new Dictionary<string, string>();
+                string testBlobOnlyAccount = "";
+                //string testBlobOnlyAccount = "";
+                IDictionary appsettings = Environment.GetEnvironmentVariables();
+                foreach (DictionaryEntry setting in appsettings)
+                {
+                    var settingString = setting.Value.ToString();
+                    if (settingString.StartsWith("APPSETTING_") && settingString.Contains("; AccountKey="))
+                    {
+                        storageConnectionStrings.Add(setting.Key.ToString(), setting.Value.ToString());
+                    }
+                }
+
                 string azureWebJobsStorageString = String.Empty;
                 string azureWebJobsDashboardStorageString = String.Empty;
                 string consumptionCodeConfigStorageConnection = String.Empty;
@@ -84,54 +93,46 @@ namespace ConnectionValidator.Controllers
 
                 // AzureWebJobsStorage can not be null. 
                 //The Azure Functions runtime uses this storage account connection string for all functions except for HTTP triggered functions.
-                List<string> settingKeys = new List<string> { "AzureWebJobsStorage", "AzureWebJobsDashboard", "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING" };
+                //List<string> settingKeys = new List<string> { "AzureWebJobsStorage", "AzureWebJobsDashboard", "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING" };
 
 
-                if (Environment.GetEnvironmentVariable("AzureWebJobsStorage") == null)
-                {
-                    //throw new Exception("AzureWebJobsStorage is not set for your function app.");
-                    storageConnectionStrings.Add("AzureWebJobsStorage", testBlobOnlyAccount);
+                //if (Environment.GetEnvironmentVariable("AzureWebJobsStorage") == null)
+                //{
+                //    //throw new Exception("AzureWebJobsStorage is not set for your function app.");
+                //    storageConnectionStrings.Add("AzureWebJobsStorage", testBlobOnlyAccount);
 
-                }
-                else
-                {
-                    azureWebJobsStorageString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
-                    storageConnectionStrings.Add("AzureWebJobsStorage", azureWebJobsStorageString);
-                }
+                //}
+                //else
+                //{
+                //    azureWebJobsStorageString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+                //    storageConnectionStrings.Add("AzureWebJobsStorage", azureWebJobsStorageString);
+                //}
 
-                if (Environment.GetEnvironmentVariable("AzureWebJobsDashboard") != null)
-                {
-                    azureWebJobsDashboardStorageString = Environment.GetEnvironmentVariable("AzureWebJobsDashboard");
-                    storageConnectionStrings.Add("AzureWebJobsDashboard", azureWebJobsDashboardStorageString);
-                }
-                else
-                {
-                    storageConnectionStrings.Add("AzureWebJobsDashboard", testBlobOnlyAccount);
-                }
+                //if (Environment.GetEnvironmentVariable("AzureWebJobsDashboard") != null)
+                //{
+                //    azureWebJobsDashboardStorageString = Environment.GetEnvironmentVariable("AzureWebJobsDashboard");
+                //    storageConnectionStrings.Add("AzureWebJobsDashboard", azureWebJobsDashboardStorageString);
+                //}
+                //else
+                //{
+                //    storageConnectionStrings.Add("AzureWebJobsDashboard", testBlobOnlyAccount);
+                //}
 
                 // For consumption plans only. But this is mandatory settings for consumption plan.
                 // Connection string for storage account where the function app code and configuration are stored. 
-                if (Environment.GetEnvironmentVariable("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING") != null)
-                {
-                    consumptionCodeConfigStorageConnection = Environment.GetEnvironmentVariable("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING");
-                    storageConnectionStrings.Add("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING", consumptionCodeConfigStorageConnection);
-                }
+                //if (Environment.GetEnvironmentVariable("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING") != null)
+                //{
+                //    consumptionCodeConfigStorageConnection = Environment.GetEnvironmentVariable("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING");
+                //    storageConnectionStrings.Add("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING", consumptionCodeConfigStorageConnection);
+                //}
 
-                ViewBag.storageConnectionStrings = storageConnectionStrings;
+            //    ViewBag.storageConnectionStrings = storageConnectionStrings;
 
                 foreach (KeyValuePair<string, string> connectionString in storageConnectionStrings)
                 {
 
-                    string validationString = MakeServiceRequestsExpectSuccess(connectionString.Value);
-                    storageValidations.Add(new StorageAccountsValidation
-                    {
-                        AppSettingsKey = connectionString.Key,
-                        Mandatory = false,
-                        AccountName = connectionString.Value.Split(new string[] { "AccountName=", ";AccountKey=" }, StringSplitOptions.RemoveEmptyEntries)[1],
-                        Message = validationString,
-                        Status = validationString == string.Empty ? 0 : 1
-                    });
-
+                    StorageAccountsValidation validationResult = MakeServiceRequestsExpectSuccess(connectionString.Key, connectionString.Value);
+                    storageValidations.Add(validationResult);
                 }
 
             }
@@ -157,30 +158,38 @@ namespace ConnectionValidator.Controllers
         // See Storage account and Storage account requirements.
 
         //Functions uses Storage for operations such as managing triggers and logging function executions.
-        internal string MakeServiceRequestsExpectSuccess(string connectionString)
+        internal StorageAccountsValidation MakeServiceRequestsExpectSuccess(string connectionKey, string connectionString)
         {
             string storageSymptoms = String.Empty;
+            int status = 0;
             string postfixStatement = "Please make sure this is a general-purpose storage account.";
+            //if (connectionKey.Equals("AzureWebJobsStorage", StringComparison.OrdinalIgnoreCase))
+            //{
+
+            //}
+
             try
             {
                 if (string.IsNullOrWhiteSpace(connectionString))
                 {
-                    return string.Empty;
+                    //  return Task.FromResult<StorageAccountsValidation> (new StorageAccountsValidation { });
+                    return new StorageAccountsValidation { };
                 }
 
 
                 CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
+               
                 // Make blob service requests
                 try
                 {
                     CloudBlobClient blobClient = account.CreateCloudBlobClient();
                     //   blobClient.ListContainersSegmentedAsync();
-                    blobClient.ListContainers().Count();
+                   // blobClient.ListContainers().Count();
                     blobClient.GetServiceProperties();
                 }
                 catch (Exception ex)
                 {
-                    storageSymptoms += "Blob is not enabled.";
+                    storageSymptoms += "Blob endpoint is not reachable. Make sure the firewall on this storage account is not misconfigured.";
                     throw ex;
                 }
 
@@ -224,15 +233,27 @@ namespace ConnectionValidator.Controllers
                     throw ex;
                 }
 
+                storageSymptoms = "Storage connection string validation passed!";
             }
             catch (Exception ex)
             {
                 storageSymptoms += "\n";
                 storageSymptoms += postfixStatement;
+                status = 1;
             }
-           
 
-            return storageSymptoms;
+
+            StorageAccountsValidation result =new StorageAccountsValidation
+            {
+                AppSettingsKey = connectionKey,
+                Mandatory = false,
+                AccountName = connectionString.Split(new string[] { "AccountName=", ";AccountKey=" }, StringSplitOptions.RemoveEmptyEntries)[1],
+                Message = storageSymptoms,
+                Status = status
+            };
+
+            //return Task.FromResult(result);
+            return result;
         }
     }
 }

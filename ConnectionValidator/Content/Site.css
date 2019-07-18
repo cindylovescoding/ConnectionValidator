@@ -39,5 +39,10 @@ button {
     text-align: left;
     background-color: #eee;
     background-image: linear-gradient(#eee, #ccc);
+
+}
+
+td {
+    word-break: break-all;
 }
 
