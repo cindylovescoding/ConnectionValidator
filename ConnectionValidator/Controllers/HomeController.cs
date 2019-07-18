@@ -27,24 +27,24 @@ namespace ConnectionValidator.Controllers
         // GET: Home
         public ActionResult Index()
         {
-            string siteFolder;
-            int fileCount;
+            //string siteFolder;
+            //int fileCount;
 
             // Validate APPINSIGHTS_INSTRUMENTATIONKEY app insights connection
-          string appInsightsKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
+          //string appInsightsKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
 
-            if (Environment.GetEnvironmentVariable("home") != null)
-            {
-                // Maps to the physical path of your site in Azure
-                siteFolder =
-                    Environment.ExpandEnvironmentVariables(@"%HOME%\site\wwwroot");
-            }
-            else
-            {
-                // Maps to the current sites root physical path.
-                // Allows us to run locally.
-                siteFolder = Server.MapPath("/");
-            }
+            //if (Environment.GetEnvironmentVariable("home") != null)
+            //{
+            //    // Maps to the physical path of your site in Azure
+            //    siteFolder =
+            //        Environment.ExpandEnvironmentVariables(@"%HOME%\site\wwwroot");
+            //}
+            //else
+            //{
+            //    // Maps to the current sites root physical path.
+            //    // Allows us to run locally.
+            //    siteFolder = Server.MapPath("/");
+            //}
 
             //fileCount =
             //    System.IO.Directory.GetFiles(
@@ -52,19 +52,29 @@ namespace ConnectionValidator.Controllers
             //        "*.*",
             //        SearchOption.AllDirectories).Length;
 
-            Dictionary<string, string> storageResults = ValidateConnectionStrings();
+             ValidateConnectionStrings();
 
             return View();
         }
 
-        public Dictionary<string, string> ValidateConnectionStrings()
+        public void ValidateConnectionStrings()
         {
-            Dictionary<string, string> storageResults = new Dictionary<string, string>();
+            StorageAccountsValidation example = new StorageAccountsValidation
+            {
+                AppSettingsKey = "haha",
+                AccountName = "cindytest",
+                Message = "enen",
+                Status = 0
+            };
+
+            List<StorageAccountsValidation> storageValidations = new List<StorageAccountsValidation> { };
+            storageValidations.Add(example);
+
             try
             {
-                string testBlobOnlyAccount = "";
-                IDictionary appsettings = Environment.GetEnvironmentVariables();
-                List<StorageAccountsValidation> storageValidations = new List<StorageAccountsValidation> { };
+                  string testBlobOnlyAccount = "";
+                //string testBlobOnlyAccount = "";
+                // IDictionary appsettings = Environment.GetEnvironmentVariables();
 
                 Dictionary<string, string> storageConnectionStrings = new Dictionary<string, string>();
                 string azureWebJobsStorageString = String.Empty;
@@ -111,29 +121,28 @@ namespace ConnectionValidator.Controllers
 
                 foreach (KeyValuePair<string, string> connectionString in storageConnectionStrings)
                 {
-                    storageResults.Add(connectionString.Key, MakeServiceRequestsExpectSuccess(connectionString.Value));
 
                     string validationString = MakeServiceRequestsExpectSuccess(connectionString.Value);
                     storageValidations.Add(new StorageAccountsValidation
                     {
                         AppSettingsKey = connectionString.Key,
+                        Mandatory = false,
                         AccountName = connectionString.Value.Split(new string[] { "AccountName=", ";AccountKey=" }, StringSplitOptions.RemoveEmptyEntries)[1],
                         Message = validationString,
-                        Status = 0
+                        Status = validationString == string.Empty ? 0 : 1
                     });
 
                 }
 
-                ViewBag.storageValidations = storageValidations;
-
-           //    return storageResults;
             }
             catch (Exception e)
             {
+
                 Console.WriteLine(e.Message);
             }
 
-            return storageResults;
+            ViewBag.storageValidations = storageValidations;
+
 
         }
 
@@ -150,7 +159,8 @@ namespace ConnectionValidator.Controllers
         //Functions uses Storage for operations such as managing triggers and logging function executions.
         internal string MakeServiceRequestsExpectSuccess(string connectionString)
         {
-            string storageSymptoms = connectionString;
+            string storageSymptoms = String.Empty;
+            string postfixStatement = "Please make sure this is a general-purpose storage account.";
             try
             {
                 if (string.IsNullOrWhiteSpace(connectionString))
@@ -168,9 +178,10 @@ namespace ConnectionValidator.Controllers
                     blobClient.ListContainers().Count();
                     blobClient.GetServiceProperties();
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    storageSymptoms += "   Blob is not enabled.";
+                    storageSymptoms += "Blob is not enabled.";
+                    throw ex;
                 }
 
                 try
@@ -178,11 +189,12 @@ namespace ConnectionValidator.Controllers
                     // Make queue service requests
                     CloudQueueClient queueClient = account.CreateCloudQueueClient();
                     queueClient.ListQueues().Count();
-                    queueClient.GetServiceProperties();
+                    queueClient.GetServiceProperties();               
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    storageSymptoms += "   Queue is not enabled.";
+                    storageSymptoms += "Queue is not enabled. ";
+                    throw ex;
                 }
 
                 try
@@ -192,9 +204,10 @@ namespace ConnectionValidator.Controllers
                     tableClient.ListTables().Count();
                     tableClient.GetServiceProperties();
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    storageSymptoms += "  Table is not enabled.";
+                    storageSymptoms += "Table is not enabled.";
+                    throw ex;
                 }
 
                 try
@@ -205,15 +218,17 @@ namespace ConnectionValidator.Controllers
                     fileClient.ListShares().Count();
                     fileClient.GetServiceProperties();
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    storageSymptoms += "   File is not enabled.";
+                    storageSymptoms += "File is not enabled.";
+                    throw ex;
                 }
 
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                Console.WriteLine(e.Message);
+                storageSymptoms += "\n";
+                storageSymptoms += postfixStatement;
             }
            
 
